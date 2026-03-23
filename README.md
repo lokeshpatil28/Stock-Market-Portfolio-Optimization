@@ -1,6 +1,5 @@
-README.md
 
-Quadratic Programming Portfolio Optimisation
+Quadratic ProgrammingPortfolio Optimisation
 
 This project implements portfolio optimisation using a Quadratic Programming (QP) approach based on the classical Markowitz mean–variance framework from Operations Research. The objective is to determine the optimal allocation of investment among a set of NSE stocks such that the overall portfolio risk is minimised for a given level of expected return.
 
