@@ -1,4 +1,18 @@
+# ---------------------------------------------------------------------------
+# EARLIER EXPLORATION -- NOT PART OF THE MAIN PIPELINE.
+#
+# This is a bare tableau simplex method for *linear* programs, written during
+# an early exploration of solving the portfolio problem via LP/simplex before
+# the project settled on a proper convex quadratic-programming formulation.
+#
+# The production solver is the from-scratch active-set QP solver in
+# portfolio_opt/solver.py (solve_qp / solve_portfolio_qp). Nothing in
+# portfolio_opt/, scripts/, or tests/ imports this file; it is kept here only
+# as a historical artifact of the alternate formulation.
+# ---------------------------------------------------------------------------
+
 import numpy as np
+
 
 class SimplexTableau:
 

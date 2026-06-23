@@ -1,0 +1,48 @@
+# Portfolio optimization configuration.
+# Consumed by portfolio_opt.data and scripts/run_pipeline.py.
+
+tickers:
+  - {symbol: "RELIANCE.NS",    sector: "Energy",                  cap_tier: "Large"}
+  - {symbol: "TCS.NS",         sector: "IT",                      cap_tier: "Large"}
+  - {symbol: "INFY.NS",        sector: "IT",                      cap_tier: "Large"}
+  - {symbol: "HDFCBANK.NS",    sector: "Banking_Private",         cap_tier: "Large"}
+  - {symbol: "ICICIBANK.NS",   sector: "Banking_Private",         cap_tier: "Large"}
+  - {symbol: "SBIN.NS",        sector: "Banking_PSU",             cap_tier: "Large"}
+  - {symbol: "ITC.NS",         sector: "FMCG",                    cap_tier: "Large"}
+  - {symbol: "HINDUNILVR.NS",  sector: "FMCG",                    cap_tier: "Large"}
+  - {symbol: "NESTLEIND.NS",   sector: "FMCG",                    cap_tier: "Large"}
+  - {symbol: "SUNPHARMA.NS",   sector: "Pharma",                  cap_tier: "Large"}
+  - {symbol: "DRREDDY.NS",     sector: "Pharma",                  cap_tier: "Large"}
+  - {symbol: "TITAN.NS",       sector: "Consumer_Discretionary",  cap_tier: "Large"}
+  - {symbol: "MARUTI.NS",      sector: "Auto",                    cap_tier: "Large"}
+  - {symbol: "TECHM.NS",       sector: "IT",                      cap_tier: "Large"}
+  - {symbol: "LT.NS",          sector: "Infra_CapitalGoods",      cap_tier: "Large"}
+  - {symbol: "ONGC.NS",        sector: "Energy",                  cap_tier: "Large"}
+  - {symbol: "GOLDBEES.NS",    sector: "Alt_Gold",                cap_tier: "Alt"}
+  - {symbol: "INDIGO.NS",      sector: "Aviation",                cap_tier: "Mid"}
+  - {symbol: "PERSISTENT.NS",  sector: "IT",                      cap_tier: "Mid"}
+  - {symbol: "FEDERALBNK.NS",  sector: "Banking_Private",         cap_tier: "Mid"}
+  - {symbol: "LUPIN.NS",       sector: "Pharma",                  cap_tier: "Mid"}
+  - {symbol: "MARICO.NS",      sector: "FMCG",                    cap_tier: "Mid"}
+  - {symbol: "AUROPHARMA.NS",  sector: "Pharma",                  cap_tier: "Mid"}
+  - {symbol: "BHARATFORG.NS",  sector: "Auto_Components",         cap_tier: "Mid"}
+  - {symbol: "HEROMOTOCO.NS",  sector: "Auto",                    cap_tier: "Large"}
+
+# Date window. Dates are computed dynamically: a trailing `lookback_years`
+# window ending today. Set explicit ISO dates (YYYY-MM-DD) to override.
+date_window:
+  lookback_years: 3
+  start_date: null      # null => end_date - lookback_years
+  end_date: null        # null => today
+
+# Covariance estimator: "shrinkage" (Ledoit-Wolf) or "sample".
+estimation_method: "shrinkage"
+
+# Rebalancing cadence used by the backtester.
+rebalance_frequency: "monthly"
+
+# Annual risk-free rate (for Sharpe ratio / tangency portfolio).
+risk_free_rate: 0.06
+
+# Minimum number of return observations a ticker must have to be usable.
+min_observations: 250
