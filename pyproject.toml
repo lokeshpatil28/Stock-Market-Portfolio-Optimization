@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "portfolio-opt"
+version = "0.1.0"
+description = "From-scratch active-set quadratic-programming portfolio optimizer (Markowitz mean-variance)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Lokesh Patil" }]
+keywords = ["quadratic-programming", "active-set", "portfolio-optimization", "markowitz", "quant"]
+# Runtime deps of the core package: numpy (solver), scipy (models: risk_parity /
+# tracking-error SLSQP), pandas (backtest / models / data frames).
+dependencies = [
+    "numpy>=1.21",
+    "scipy>=1.7",
+    "pandas>=1.3",
+]
+
+[project.optional-dependencies]
+# Live-data pipeline: yfinance downloads, YAML config, Ledoit-Wolf shrinkage.
+data = ["yfinance>=0.2", "pyyaml>=6.0", "scikit-learn>=1.1"]
+plot = ["matplotlib>=3.4"]
+# Tests: pytest, plus cvxpy/osqp for the solver-validation cross-check. Run the
+# suite with the data extra too: pip install -e ".[dev,data]".
+dev = ["pytest>=7.0", "cvxpy>=1.4", "osqp>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["portfolio_opt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
