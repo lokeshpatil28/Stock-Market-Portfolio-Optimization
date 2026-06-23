@@ -1,6 +1,12 @@
-numpy
-pandas
-matplotlib
-yfinance
-pyyaml
-scikit-learn
+# Runtime dependencies for the Streamlit dashboard (Streamlit Community Cloud).
+# Pinned for reproducible deploys. cvxpy is intentionally EXCLUDED here: it is
+# only needed by the solver-validation tests (see pyproject [dev] extra), not by
+# the app at runtime.
+streamlit==1.40.0
+numpy==2.3.5
+pandas==2.3.3
+plotly==6.8.0
+scipy==1.17.0
+scikit-learn==1.7.2
+yfinance==1.2.0
+PyYAML==6.0.3
