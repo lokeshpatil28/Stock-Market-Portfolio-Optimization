@@ -71,11 +71,17 @@ def run_backtest(prices_df, model_fn, model_kwargs=None,
     Returns
     -------
     dict with keys:
+        ``status`` -- ``"ok"`` or ``"insufficient_history"``,
         ``equity_curve`` (Series), ``daily_weights`` (wide DataFrame, drifted),
         ``rebalance_weights`` (wide DataFrame, targets at each rebalance),
         ``turnover`` (Series indexed by rebalance date),
         ``n_rebalances``, ``first_rebalance``, ``last_rebalance``,
         ``n_skipped`` (rebalances where the model was infeasible / non-convergent).
+
+    If no rebalance date has the required ``lookback_days`` of trailing history,
+    the function does **not** raise: it returns a result with
+    ``status="insufficient_history"``, empty curves/weights, ``n_rebalances=0``,
+    ``first_rebalance=None``, and ``available_days`` (the trading days present).
     """
     model_kwargs = dict(model_kwargs or {})
     prices = prices_df.sort_index()
@@ -93,8 +99,22 @@ def run_backtest(prices_df, model_fn, model_kwargs=None,
     pos = {d: i for i, d in enumerate(idx)}
     rebals = [d for d in all_rebals if d in pos and pos[d] >= lookback_days]
     if not rebals:
-        raise ValueError("not enough history for any rebalance "
-                         f"(need >= {lookback_days} trailing days)")
+        # Not enough trailing history for even one rebalance: return a clearly
+        # flagged empty result rather than raising, so callers (e.g. the
+        # dashboard) can show a friendly message instead of crashing.
+        return {
+            "equity_curve": pd.Series(dtype=float, name="portfolio_value"),
+            "daily_weights": pd.DataFrame(columns=tickers),
+            "rebalance_weights": pd.DataFrame(columns=tickers),
+            "turnover": pd.Series(dtype=float, name="turnover"),
+            "n_rebalances": 0,
+            "first_rebalance": None,
+            "last_rebalance": None,
+            "n_skipped": 0,
+            "lookback_days": lookback_days,
+            "available_days": len(idx),
+            "status": "insufficient_history",
+        }
     rebal_set = set(rebals)
     start_i = pos[rebals[0]]
 
@@ -160,6 +180,7 @@ def run_backtest(prices_df, model_fn, model_kwargs=None,
         "first_rebalance": rebals[0],
         "last_rebalance": rebals[-1],
         "n_skipped": n_skipped,
+        "status": "ok",
     }
 
 

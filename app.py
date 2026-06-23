@@ -103,6 +103,9 @@ def run_backtest_cached(tickers, model_name, model_kwargs_items, lookback_years,
                         rebalance_frequency=rebalance_frequency,
                         lookback_years=lookback_years,
                         transaction_cost_bps=cost_bps, estimation_method=method)
+    if bt.get("status") == "insufficient_history":
+        # Nothing to score / benchmark — surface the flag to the tab.
+        return {"status": "insufficient_history", "bt": bt}
     perf = B.compute_performance_metrics(bt["equity_curve"], rf,
                                          turnover=bt["turnover"])
     benches = B.compute_benchmarks(prices, bt["first_rebalance"],
@@ -110,7 +113,8 @@ def run_backtest_cached(tickers, model_name, model_kwargs_items, lookback_years,
                                    transaction_cost_bps=cost_bps)
     bench_perf = {name: B.compute_performance_metrics(curve, rf)
                   for name, curve in benches.items()}
-    return {"bt": bt, "perf": perf, "benches": benches, "bench_perf": bench_perf}
+    return {"status": "ok", "bt": bt, "perf": perf, "benches": benches,
+            "bench_perf": bench_perf}
 
 
 @st.cache_data(show_spinner=True)
@@ -422,7 +426,15 @@ with tab2:
 with tab3:
     st.subheader("Walk-forward backtest")
     cc1, cc2, cc3 = st.columns(3)
-    lookback = cc1.slider("Lookback (years)", 1, 3, 1)
+    # Adaptive max: never let the slider request more trailing history than the
+    # currently selected tickers actually provide (recomputed per selection).
+    max_lb = max(1, len(returns_df) // 252)
+    if max_lb >= 2:
+        lookback = cc1.slider("Lookback (years)", 1, max_lb, 1)
+    else:
+        lookback = 1
+        cc1.metric("Lookback (years)", 1)
+        cc1.caption("Only ~1 year of aligned history for this selection.")
     cost_bps = cc2.slider("Transaction cost (bps)", 0, 50, 10, 5)
     st.caption("Strategy uses the current model + constraints, rebalanced "
                f"{maps['rebalance_frequency']}, vs equal-weight and Nifty-50 benchmarks.")
@@ -445,78 +457,88 @@ with tab3:
                                   tuple(sorted(bt_kwargs.items())), lookback,
                                   cost_bps, cov_method, maps["rebalance_frequency"],
                                   rf, min_obs)
-    bt, perf, benches, bench_perf = res["bt"], res["perf"], res["benches"], res["bench_perf"]
 
-    strat_curve = bt["equity_curve"]
-    # --- Equity curve ---
-    fig_eq = go.Figure()
-    fig_eq.add_trace(go.Scatter(x=strat_curve.index, y=strat_curve.values,
-                                name=model_name, line=dict(color="#1f77b4", width=2)))
-    bench_styles = {"equal_weight": ("Equal weight", "#2ca02c"),
-                    "buy_and_hold_equal": ("Buy & hold EW", "#9467bd"),
-                    "nifty50": ("Nifty 50", "#d62728")}
-    for key, (lbl, col) in bench_styles.items():
-        if key in benches:
-            fig_eq.add_trace(go.Scatter(x=benches[key].index, y=benches[key].values,
-                                        name=lbl, line=dict(color=col, width=1.5,
-                                                            dash="dot")))
-    fig_eq.update_layout(height=360, yaxis_title="Growth of 1.0",
-                         margin=dict(t=10), legend=dict(orientation="h", y=-0.25))
-    st.plotly_chart(fig_eq, use_container_width=True)
-    if "nifty50" not in benches:
-        st.caption("⚠️ Nifty-50 (^NSEI) live download unavailable — overlay omitted "
-                   "(not faked).")
+    if res["status"] == "insufficient_history":
+        btx = res["bt"]
+        st.warning(
+            f"Not enough trailing history for a {lookback}-year lookback with the "
+            f"current data/ticker selection — {btx['available_days']} trading days "
+            f"available, need {btx['lookback_days']}. Try a shorter lookback or "
+            f"select more history.")
+    else:
+        bt, perf, benches, bench_perf = (res["bt"], res["perf"], res["benches"],
+                                         res["bench_perf"])
 
-    # --- Drawdown (same x-axis) ---
-    dd = perf["drawdown_series"]
-    fig_dd = go.Figure(go.Scatter(x=dd.index, y=dd.values * 100, fill="tozeroy",
-                                  line=dict(color="#d62728"), name="Drawdown"))
-    fig_dd.update_layout(height=240, yaxis_title="Drawdown %", margin=dict(t=10),
-                         xaxis_range=[strat_curve.index.min(), strat_curve.index.max()])
-    st.plotly_chart(fig_dd, use_container_width=True)
+        strat_curve = bt["equity_curve"]
+        # --- Equity curve ---
+        fig_eq = go.Figure()
+        fig_eq.add_trace(go.Scatter(x=strat_curve.index, y=strat_curve.values,
+                                    name=model_name, line=dict(color="#1f77b4", width=2)))
+        bench_styles = {"equal_weight": ("Equal weight", "#2ca02c"),
+                        "buy_and_hold_equal": ("Buy & hold EW", "#9467bd"),
+                        "nifty50": ("Nifty 50", "#d62728")}
+        for key, (lbl, col) in bench_styles.items():
+            if key in benches:
+                fig_eq.add_trace(go.Scatter(x=benches[key].index, y=benches[key].values,
+                                            name=lbl, line=dict(color=col, width=1.5,
+                                                                dash="dot")))
+        fig_eq.update_layout(height=360, yaxis_title="Growth of 1.0",
+                             margin=dict(t=10), legend=dict(orientation="h", y=-0.25))
+        st.plotly_chart(fig_eq, use_container_width=True)
+        if "nifty50" not in benches:
+            st.caption("⚠️ Nifty-50 (^NSEI) live download unavailable — overlay omitted "
+                       "(not faked).")
 
-    # --- Rolling 6-month Sharpe ---
-    rs = perf["rolling_sharpe"].dropna()
-    fig_rs = go.Figure(go.Scatter(x=rs.index, y=rs.values, line=dict(color="#1f77b4"),
-                                  name="Rolling 6m Sharpe"))
-    fig_rs.add_hline(y=0, line=dict(color="#aaa", dash="dot"))
-    fig_rs.update_layout(height=240, yaxis_title="Rolling 6m Sharpe",
-                         margin=dict(t=10))
-    st.plotly_chart(fig_rs, use_container_width=True)
+        # --- Drawdown (same x-axis) ---
+        dd = perf["drawdown_series"]
+        fig_dd = go.Figure(go.Scatter(x=dd.index, y=dd.values * 100, fill="tozeroy",
+                                      line=dict(color="#d62728"), name="Drawdown"))
+        fig_dd.update_layout(height=240, yaxis_title="Drawdown %", margin=dict(t=10),
+                             xaxis_range=[strat_curve.index.min(), strat_curve.index.max()])
+        st.plotly_chart(fig_dd, use_container_width=True)
 
-    # --- Weight-over-time stacked area (rebalance history) ---
-    st.markdown("#### Weights over time (rebalances)")
-    rw = bt["rebalance_weights"] * 100
-    rw.columns = [c.replace(".NS", "") for c in rw.columns]
-    fig_area = go.Figure()
-    for col in rw.columns:
-        fig_area.add_trace(go.Scatter(x=rw.index, y=rw[col], name=col,
-                                      stackgroup="one", mode="lines"))
-    fig_area.update_layout(height=380, yaxis_title="Weight %",
-                           margin=dict(t=10), legend=dict(font=dict(size=9)))
-    st.plotly_chart(fig_area, use_container_width=True)
+        # --- Rolling 6-month Sharpe ---
+        rs = perf["rolling_sharpe"].dropna()
+        fig_rs = go.Figure(go.Scatter(x=rs.index, y=rs.values, line=dict(color="#1f77b4"),
+                                      name="Rolling 6m Sharpe"))
+        fig_rs.add_hline(y=0, line=dict(color="#aaa", dash="dot"))
+        fig_rs.update_layout(height=240, yaxis_title="Rolling 6m Sharpe",
+                             margin=dict(t=10))
+        st.plotly_chart(fig_rs, use_container_width=True)
 
-    # --- Metrics table ---
-    st.markdown("#### Performance metrics")
-    rows = {model_name: perf["metrics"]}
-    for key, (lbl, _) in bench_styles.items():
-        if key in bench_perf:
-            rows[lbl] = bench_perf[key]["metrics"]
-    mt = pd.DataFrame(rows).T
-    show = pd.DataFrame({
-        "Ann. return (CAGR) %": mt["annualized_return"] * 100,
-        "Volatility %": mt["annualized_vol"] * 100,
-        "Sharpe": mt["sharpe_ratio"],
-        "Max drawdown %": mt["max_drawdown"] * 100,
-        "Avg turnover": mt.get("avg_turnover"),
-    })
-    st.dataframe(show.style.format({"Ann. return (CAGR) %": "{:.2f}",
-                                    "Volatility %": "{:.2f}", "Sharpe": "{:.2f}",
-                                    "Max drawdown %": "{:.2f}", "Avg turnover": "{:.3f}"}),
-                 use_container_width=True)
-    st.caption("Sharpe uses annualized **arithmetic** mean excess return; the "
-               "Return column is geometric CAGR — both standard, they won't divide "
-               "exactly (volatility drag).")
+        # --- Weight-over-time stacked area (rebalance history) ---
+        st.markdown("#### Weights over time (rebalances)")
+        rw = bt["rebalance_weights"] * 100
+        rw.columns = [c.replace(".NS", "") for c in rw.columns]
+        fig_area = go.Figure()
+        for col in rw.columns:
+            fig_area.add_trace(go.Scatter(x=rw.index, y=rw[col], name=col,
+                                          stackgroup="one", mode="lines"))
+        fig_area.update_layout(height=380, yaxis_title="Weight %",
+                               margin=dict(t=10), legend=dict(font=dict(size=9)))
+        st.plotly_chart(fig_area, use_container_width=True)
+
+        # --- Metrics table ---
+        st.markdown("#### Performance metrics")
+        rows = {model_name: perf["metrics"]}
+        for key, (lbl, _) in bench_styles.items():
+            if key in bench_perf:
+                rows[lbl] = bench_perf[key]["metrics"]
+        mt = pd.DataFrame(rows).T
+        show = pd.DataFrame({
+            "Ann. return (CAGR) %": mt["annualized_return"] * 100,
+            "Volatility %": mt["annualized_vol"] * 100,
+            "Sharpe": mt["sharpe_ratio"],
+            "Max drawdown %": mt["max_drawdown"] * 100,
+            "Avg turnover": mt.get("avg_turnover"),
+        })
+        st.dataframe(show.style.format({"Ann. return (CAGR) %": "{:.2f}",
+                                        "Volatility %": "{:.2f}", "Sharpe": "{:.2f}",
+                                        "Max drawdown %": "{:.2f}", "Avg turnover": "{:.3f}"}),
+                     use_container_width=True)
+        st.caption("Sharpe uses annualized **arithmetic** mean excess return; the "
+                   "Return column is geometric CAGR — both standard, they won't divide "
+                   "exactly (volatility drag).")
 
 
 # ---------------------------------------------------------------------------
