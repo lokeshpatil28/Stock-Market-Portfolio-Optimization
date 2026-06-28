@@ -457,3 +457,7 @@ This project began as a 3-member Operations Research coursework submission
 the from-scratch validated active-set QP solver, the additional models and
 constraints, the walk-forward backtester, and the deployed dashboard — is an
 independent solo rebuild and extension of that starting point.
+
+## Author
+- Lokesh Patil
+- Aryan Baheti
